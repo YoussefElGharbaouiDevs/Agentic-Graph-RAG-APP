@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# FastAPI / Uvicorn
+*.log
+
+# FAISS index files
+*.index
+*.faiss
+data/
+
+# Neo4j
+neo4j_data/
+
+# Node / React
+node_modules/
+frontend/build/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Q-table snapshots (optional: remove if you want to commit trained state)
+*.npy
+qtable_*.pkl
