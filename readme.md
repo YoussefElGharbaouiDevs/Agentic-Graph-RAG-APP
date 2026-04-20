@@ -254,9 +254,3 @@ Never commit `.env` to version control. Use `.env.example` as a template.
 - [FAISS — Facebook AI Similarity Search](https://github.com/facebookresearch/faiss)
 - [sentence-transformers](https://www.sbert.net)
 - [DataCamp FastAPI tutorial](https://www.datacamp.com/tutorial/introduction-fastapi-tutorial)
-
----
-
-## Author
-
-Project supervised by **Dr. El Mkhalet Mouna** — 4th year AI specialization, PFA project.
