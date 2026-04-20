@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+langchain
+langchain-community
+langchain-core
+sentence-transformers
+faiss-cpu
+numpy
+neo4j
+pydantic
+pydantic-settings
+python-dotenv
+httpx
+requests
+tqdm
