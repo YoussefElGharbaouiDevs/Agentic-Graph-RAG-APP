@@ -5,6 +5,9 @@ langchain-community
 langchain-core
 langchain-huggingface
 langchain-text-splitters
+langchain_openai
+langchain_experimental
+langchain-neo4j
 sentence-transformers
 faiss-cpu
 numpy
@@ -16,3 +19,4 @@ httpx
 requests
 tqdm
 PyPDF2
+dotenv
