@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
         stats = emb_svc.get_stats()
         print(f"[startup] Loaded existing index: {stats['total_vectors']} vectors.")
     else:
-        pdf_path = Path(os.getenv("PDF_PATH", "data/13.pdf"))
+        pdf_path = Path(os.getenv("PDF_PATH", "data/echauffements_stratospherique_cleaned.pdf"))
         if pdf_path.exists():
             print(f"[startup] Building index from {pdf_path} …")
             text = chk_svc.extract_text_from_pdf(str(pdf_path))

@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import List, Tuple
 
-from pypdf import PdfReader
+from PyPDF2 import PdfReader
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

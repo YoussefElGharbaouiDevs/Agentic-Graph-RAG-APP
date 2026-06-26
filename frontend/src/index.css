@@ -1,13 +1,550 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap');
+
+/* =============================================
+   DESIGN TOKENS — Deep Space
+   Référence : NVIDIA NIM · Groq · Perplexity
+   ============================================= */
+:root {
+  /* ── Backgrounds (5 couches de profondeur) ── */
+  --bg-void:    #050709;
+  --bg-base:    #07090f;
+  --bg-surface: #0b0f18;
+  --bg-card:    #0e1420;
+  --bg-raised:  #131c2c;
+  --bg-input:   #080c14;
+  --bg-overlay: rgba(5, 7, 9, 0.94);
+
+  /* ── Borders ── */
+  --border-ghost: #0f1828;
+  --border-dim:   #162030;
+  --border-base:  #1e2e42;
+  --border-strong:#2a3f58;
+  --border-cyan:  rgba(34, 211, 238, 0.20);
+
+  /* ── Accent : Cyan électrique (utilisé avec parcimonie) ── */
+  --cyan:        #22d3ee;
+  --cyan-bright: #38e8ff;
+  --cyan-deep:   #0e9ab5;
+  --cyan-dim:    rgba(34, 211, 238, 0.07);
+  --cyan-soft:   rgba(34, 211, 238, 0.12);
+  --cyan-border: rgba(34, 211, 238, 0.20);
+
+  /* ── Status ── */
+  --success:      #10b981;
+  --success-dim:  rgba(16, 185, 129, 0.10);
+  --warning:      #f59e0b;
+  --warning-dim:  rgba(245, 158, 11, 0.10);
+  --danger:       #ef4444;
+  --danger-dim:   rgba(239, 68, 68, 0.10);
+  --info:         #60a5fa;
+
+  /* ── Text ── */
+  --text-head:      #eef4ff;
+  --text-primary:   #c5d5ea;
+  --text-secondary: #4a6480;
+  --text-muted:     #243550;
+  --text-data:      #7ecde4;    /* monospace / valeurs numériques */
+  --text-code:      #67c8e0;
+
+  /* ── Legacy compat (utilisé dans inline styles des tabs) ── */
+  --primary-color:   #22d3ee;
+  --primary-hover:   #0e9ab5;
+  --secondary-color: #60a5fa;
+  --accent-color:    #22d3ee;
+  --success-color:   #10b981;
+  --warning-color:   #f59e0b;
+  --danger-color:    #ef4444;
+  --text-accent:     #22d3ee;
+  --glass-border:    #1e2e42;
+  --panel-bg:        #0b0f18;
+
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.70);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.65);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.80);
+  --shadow-glow: none;
+
+  /* ── Radius ── */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* =============================================
+   LIGHT THEME (Futuristic Ice / Neumorphism)
+   ============================================= */
+.light-theme {
+  /* Fonds : Icy Blue/Grey très subtil pour la base, cartes en blanc pur */
+  --bg-void:    #ffffff;
+  --bg-base:    #eef2f6; 
+  --bg-surface: #f4f7f9;
+  --bg-card:    #ffffff;
+  --bg-raised:  #ffffff;
+  --bg-input:   #f8fafc;
+  --bg-overlay: rgba(255, 255, 255, 0.85);
+
+  /* Bordures : effet Glassmorphism avec un soupçon de cyan */
+  --border-ghost: rgba(2, 132, 199, 0.08);
+  --border-dim:   rgba(2, 132, 199, 0.15);
+  --border-base:  rgba(2, 132, 199, 0.25);
+  --border-strong:rgba(2, 132, 199, 0.40);
+  --border-cyan:  rgba(6, 182, 212, 0.40);
+
+  /* Accents : Cyan/Bleu électrique brillant */
+  --cyan:        #0284c7;
+  --cyan-bright: #0ea5e9;
+  --cyan-deep:   #0369a1;
+  --cyan-dim:    rgba(14, 165, 233, 0.12);
+  --cyan-soft:   rgba(14, 165, 233, 0.20);
+  --cyan-border: rgba(14, 165, 233, 0.40);
+
+  --success:      #059669;
+  --warning:      #d97706;
+  --danger:       #dc2626;
+
+  /* Textes : Anthracite et bleutés */
+  --text-head:      #0f172a;
+  --text-primary:   #334155;
+  --text-secondary: #64748b;
+  --text-muted:     #94a3b8;
+  --text-data:      #0284c7;
+  --text-code:      #0ea5e9;
+
+  /* Legacy Compat */
+  --primary-color:   #0ea5e9;
+  --primary-hover:   #0284c7;
+  --secondary-color: #3b82f6;
+  --accent-color:    #0ea5e9;
+  --success-color:   #059669;
+  --warning-color:   #d97706;
+  --danger-color:    #dc2626;
+  --text-accent:     #0ea5e9;
+  --glass-border:    rgba(2, 132, 199, 0.15);
+  --panel-bg:        #ffffff;
+
+  /* Ombres flottantes (Neumorphism / Glass) teinté de cyan */
+  --shadow-sm: 0 2px 8px rgba(14, 165, 233, 0.05);
+  --shadow-md: 0 10px 30px rgba(14, 165, 233, 0.08), 0 2px 4px rgba(14, 165, 233, 0.03);
+  --shadow-lg: 0 20px 40px rgba(14, 165, 233, 0.12), 0 4px 10px rgba(14, 165, 233, 0.05);
+}
+
+.light-theme body {
+  background-color: var(--bg-base);
+  /* Un léger dégradé givré en fond */
+  background-image: 
+    radial-gradient(circle at 15% 50%, rgba(14, 165, 233, 0.04), transparent 25%),
+    radial-gradient(circle at 85% 30%, rgba(14, 165, 233, 0.04), transparent 25%),
+    radial-gradient(circle, rgba(14, 165, 233, 0.1) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 24px 24px;
+  background-attachment: fixed;
+}
+
+/* =========================================
+   RESET
+   ========================================= */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* =========================================
+   BODY — Deep space + dot grid
+   ========================================= */
+html { font-size: 15px; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--text-primary);
+  min-height: 100vh;
+
+  /* Dot grid — signal de précision */
+  background-color: var(--bg-base);
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.032) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
+  background-attachment: fixed;
+}
+
+/* =========================================
+   TYPOGRAPHY
+   ========================================= */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 0.5rem;
+  color: var(--text-head);
+  letter-spacing: -0.02em;
+}
+
+/* Utilisé sur icônes lucide et anciens titres */
+.gradient-text {
+  color: var(--cyan) !important;
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  -webkit-text-fill-color: unset !important;
+  background-clip: unset !important;
+}
+
+/* Micro-label en uppercase */
+.section-label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+/* Valeurs numériques / data — toujours en mono */
+.data-value {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.875rem;
+  color: var(--text-data);
+  letter-spacing: -0.01em;
+}
+
+/* =========================================
+   PAGE HEADER — utilisé dans chaque tab
+   ========================================= */
+.page-header {
+  padding: 1.375rem 1.75rem 1.125rem;
+  border-bottom: 1px solid var(--border-ghost);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
+.page-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Icône de page — carré avec bordure cyan subtile */
+.page-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  background: var(--cyan-dim);
+  border: 1px solid var(--cyan-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.page-category {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin-bottom: 0.12rem;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-head);
+  letter-spacing: -0.028em;
+  margin: 0;
+  line-height: 1.15;
+}
+
+.page-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0.25rem 0 0;
+  line-height: 1.5;
+}
+
+/* =========================================
+   SECTION TABS — switcher interne
+   ========================================= */
+.section-tabs {
+  display: flex;
+  gap: 1px;
+  background: var(--border-dim);
+  padding: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-dim);
+  overflow: hidden;
+}
+
+.section-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.4rem 0.875rem;
+  border: none;
+  background: var(--bg-void);
+  color: var(--text-secondary);
+  font-size: 0.775rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.section-tab.active {
+  background: var(--bg-raised);
+  color: var(--cyan);
+  position: relative;
+}
+
+.section-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: var(--cyan);
+}
+
+.section-tab:not(.active):hover {
+  background: var(--bg-dim);
+  color: var(--text-primary);
+}
+
+/* =========================================
+   PANEL SYSTEM — cards plates, précises
+   ========================================= */
+
+/* Surface principale */
+.glass-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-md);
+  transition: border-color 0.12s ease;
+}
+.glass-card:hover {
+  border-color: var(--border-base);
+}
+
+/* Sous-panneau secondaire */
+.glass-panel {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-ghost);
+  border-radius: var(--radius-md);
+  transition: border-color 0.12s ease;
+}
+.glass-panel:hover {
+  border-color: var(--border-dim);
+}
+
+/* En-tête interne de card avec séparateur */
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding-bottom: 0.875rem;
+  margin-bottom: 0.875rem;
+  border-bottom: 1px solid var(--border-ghost);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+/* =========================================
+   BUTTONS
+   ========================================= */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.575rem 1.125rem;
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.10s ease;
+  border: 1px solid transparent;
+  outline: none;
+  white-space: nowrap;
+  letter-spacing: 0.005em;
+}
+
+/* Primary — Cyan plat sur fond sombre (pas de gradient) */
+.btn-primary {
+  background: var(--cyan);
+  color: var(--bg-void);      /* texte sombre sur cyan clair */
+  border-color: transparent;
+  font-weight: 600;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--cyan-bright);
+}
+.btn-primary:active:not(:disabled) {
+  background: var(--cyan-deep);
+  transform: scale(0.98);
+}
+.btn-primary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--border-base);
+}
+.btn-secondary:hover {
+  background: var(--cyan-dim);
+  border-color: var(--cyan-border);
+  color: var(--cyan);
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.22);
+}
+.btn-danger:hover {
+  background: var(--danger-dim);
+}
+
+/* =========================================
+   INPUTS
+   ========================================= */
+.input-field {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-md);
+  padding: 0.675rem 1rem;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  transition: border-color 0.10s ease, box-shadow 0.10s ease;
+}
+.input-field::placeholder {
+  color: var(--text-muted);
+}
+.input-field:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 2px var(--cyan-dim);
+}
+textarea.input-field {
+  resize: vertical;
+  min-height: 100px;
+  line-height: 1.6;
+}
+select.input-field {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%234a6480' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.25rem;
+}
+select.input-field option {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+/* =========================================
+   LAYOUT HELPERS
+   ========================================= */
+.container { max-width: 1400px; margin: 0 auto; padding: 0 1.5rem; }
+.flex-row  { display: flex; flex-direction: row; }
+.flex-col  { display: flex; flex-direction: column; }
+.items-center    { align-items: center; }
+.items-start     { align-items: flex-start; }
+.justify-between { justify-content: space-between; }
+.justify-center  { justify-content: center; }
+.gap-1 { gap: 0.25rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-4 { gap: 1rem; }
+.gap-6 { gap: 1.5rem; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+
+/* =========================================
+   BADGES
+   ========================================= */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.55rem;
+  border-radius: 3px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--border-dim);
+  background: var(--bg-raised);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.badge-blue   { background: rgba(96,  165, 250, 0.08); color: #60a5fa; border-color: rgba(96,  165, 250, 0.20); }
+.badge-green  { background: rgba(16,  185, 129, 0.08); color: #34d399; border-color: rgba(16,  185, 129, 0.20); }
+.badge-purple { background: rgba(139, 92,  246, 0.08); color: #a78bfa; border-color: rgba(139, 92,  246, 0.20); }
+.badge-red    { background: rgba(239, 68,  68,  0.08); color: #f87171; border-color: rgba(239, 68,  68,  0.20); }
+
+/* =========================================
+   SCROLLBAR
+   ========================================= */
+::-webkit-scrollbar          { width: 4px; height: 4px; }
+::-webkit-scrollbar-track    { background: transparent; }
+::-webkit-scrollbar-thumb    { background: var(--border-strong); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #2a4060; }
+
+/* =========================================
+   CODE / MONO
+   ========================================= */
+pre, code, .mono {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.8rem;
+  color: var(--text-code);
+}
+
+/* =========================================
+   ANIMATIONS
+   ========================================= */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.30; }
+}
+.animate-pulse { animation: pulse 1.6s ease-in-out infinite; }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.animate-spin { animation: spin 0.85s linear infinite; }
+
+/* Pulse cyan pour status indicators */
+@keyframes cyanPing {
+  0%   { box-shadow: 0 0 0 0   rgba(34, 211, 238, 0.5); }
+  70%  { box-shadow: 0 0 0 5px rgba(34, 211, 238, 0); }
+  100% { box-shadow: 0 0 0 0   rgba(34, 211, 238, 0); }
+}
+.status-ping { animation: cyanPing 2s ease-out infinite; }
+
+/* =========================================
+   MISC
+   ========================================= */
+.divider {
+  height: 1px;
+  background: var(--border-ghost);
+  border: none;
 }

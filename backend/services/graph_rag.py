@@ -23,6 +23,7 @@ from typing import List, Dict, Tuple, Any, Optional
 NEO4J_URI      = os.getenv("NEO4J_URI",      "bolt://localhost:7687")
 NEO4J_USER     = os.getenv("NEO4J_USER",     "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
+NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", os.getenv("NEO4J_USER", "neo4j"))
 
 _driver = None
 
@@ -60,11 +61,11 @@ def _get_nlp():
         try:
             import spacy
             try:
-                _nlp = spacy.load("en_core_web_sm")
+                _nlp = spacy.load("fr_core_news_sm")
             except OSError:
                 from spacy.cli import download
-                download("en_core_web_sm")
-                _nlp = spacy.load("en_core_web_sm")
+                download("fr_core_news_sm")
+                _nlp = spacy.load("fr_core_news_sm")
         except Exception:
             _nlp = None
     return _nlp
@@ -160,7 +161,7 @@ def ingest_to_neo4j(entities: List[Dict], relations: List[Dict]) -> bool:
     BATCH_SIZE = 100
 
     try:
-        with driver.session() as session:
+        with driver.session(database=NEO4J_DATABASE) as session:
             # Insert nodes in batches
             for i in range(0, len(entities), BATCH_SIZE):
                 batch = entities[i:i+BATCH_SIZE]
@@ -184,34 +185,64 @@ def ingest_to_neo4j(entities: List[Dict], relations: List[Dict]) -> bool:
 def query_graph(query: str, top_k: int = 5) -> List[Dict]:
     """
     Search Neo4j for entities/paths related to the query.
-    Returns a list of result dicts.
+    Enhanced with deeper path traversal (up to 3 hops).
     """
     if not neo4j_available():
         return _mock_graph_results(query)
 
-    keywords = [w for w in re.findall(r'\b\w{4,}\b', query.lower())][:5]
+    keywords = [w for w in re.findall(r'\b\w{3,}\b', query.lower())]
+    stopwords = {'le','la','les','un','une','des','et','ou','pour','dans','sur','avec','qui','que','quoi',
+                 'dont','quand','pourquoi','comment','ce','cet','cette','ces','mon','ton','son','ma','ta',
+                 'sa','mes','tes','ses','notre','votre','leur','nos','vos','leurs','je','tu','il','elle',
+                 'nous','vous','ils','elles','me','te','se','lui','est','sont','ont','les','aux'}
+    keywords = [w for w in keywords if w not in stopwords][:6]
 
     driver = get_driver()
     results = []
 
     try:
-        with driver.session() as session:
+        with driver.session(database=NEO4J_DATABASE) as session:
             for kw in keywords:
-                records = session.run(
-                    """
-                    MATCH (n:Entity)
-                    WHERE toLower(n.id) CONTAINS $kw
-                    OPTIONAL MATCH (n)-[r]->(m)
-                    RETURN n.id AS node, r.type AS rel, m.id AS neighbor
-                    LIMIT 10
-                    """,
-                    kw=kw,
-                ).data()
-                results.extend(records)
+                cypher_str = """
+                MATCH path = (n)-[*1..3]-(m)
+                WHERE toLower(n.id) CONTAINS $kw OR toLower(m.id) CONTAINS $kw
+                RETURN path, length(path) as depth
+                ORDER BY depth DESC
+                LIMIT 15
+                """
+                # Use raw result (not .data()) to keep native path objects
+                raw = session.run(cypher_str, kw=kw)
+                for record in raw:
+                    try:
+                        path = record["path"]
+                        # Native Neo4j path object
+                        nodes = [node.get("id", "?") for node in path.nodes]
+                        relationships = [rel.type for rel in path.relationships]
+                        results.append({
+                            "path": " -> ".join(nodes),
+                            "relations": relationships,
+                            "depth": record["depth"],
+                            "cypher_query": cypher_str.strip().replace("$kw", f"'{kw}'")
+                        })
+                    except Exception as inner_e:
+                        # Fallback: path came back as dict (some driver versions)
+                        try:
+                            path_dict = dict(record["path"])
+                            start = path_dict.get("start", {}).get("id", "?")
+                            end   = path_dict.get("end",   {}).get("id", "?")
+                            results.append({
+                                "path": f"{start} -> {end}",
+                                "relations": [],
+                                "depth": record["depth"],
+                                "cypher_query": cypher_str.strip().replace("$kw", f"'{kw}'")
+                            })
+                        except Exception:
+                            pass
     except Exception as e:
         print(f"[graph_rag] query error: {e}")
 
-    return results[:top_k * 2]
+    return results[:top_k]
+
 
 
 # ── Louvain community detection (networkx-based) ──────────────────────────────
@@ -242,14 +273,23 @@ def detect_communities(entities: List[Dict], relations: List[Dict]) -> Dict:
         for node, comm_id in partition.items():
             communities[comm_id].append(node)
 
+        # Sort communities by size descending
+        sorted_comms = sorted(communities.values(), key=len, reverse=True)
+
+        # Re-index partition and communities sequentially for a cleaner UI
+        clean_partition = {}
+        clean_communities = []
+        for i, members in enumerate(sorted_comms):
+            new_id = i + 1  # 1-indexed (Cluster 1, Cluster 2...)
+            for m in members:
+                clean_partition[m] = new_id
+            clean_communities.append({"id": new_id, "members": members, "size": len(members)})
+
         return {
-            "partition": partition,
+            "partition": clean_partition,
             "modularity": round(modularity, 3),
-            "num_clusters": len(communities),
-            "communities": [
-                {"id": cid, "members": members, "size": len(members)}
-                for cid, members in communities.items()
-            ],
+            "num_clusters": len(clean_communities),
+            "communities": clean_communities,
         }
 
     except ImportError:
@@ -355,18 +395,79 @@ def _mock_communities(entities: List[Dict]) -> Dict:
 
 # ── build full graph from chunks ──────────────────────────────────────────────
 
+def _neo4j_has_data() -> bool:
+    """Quick check – returns True if Neo4j already contains at least one node."""
+    try:
+        driver = get_driver()
+        if driver is None:
+            return False
+        db = os.getenv("NEO4J_DATABASE", os.getenv("NEO4J_USER", "neo4j"))
+        with driver.session(database=db) as session:
+            result = session.run("MATCH (n) RETURN count(n) AS cnt LIMIT 1")
+            count = result.single()["cnt"]
+            return count > 0
+    except Exception as e:
+        print(f"[graph_rag] _neo4j_has_data check failed: {e}")
+        return False
+
+
+def _read_graph_from_neo4j() -> Tuple[List[Dict], List[Dict]]:
+    """Read existing entities and relations directly from Neo4j."""
+    entities: List[Dict] = []
+    relations: List[Dict] = []
+    try:
+        driver = get_driver()
+        if driver is None:
+            return entities, relations
+        db = os.getenv("NEO4J_DATABASE", os.getenv("NEO4J_USER", "neo4j"))
+        with driver.session(database=db) as session:
+            node_result = session.run("MATCH (n) RETURN n.id AS id, labels(n)[0] AS label LIMIT 1000")
+            for record in node_result:
+                if record["id"]:
+                    entities.append({"id": record["id"], "label": record["label"] or "ENTITY"})
+
+            rel_result = session.run(
+                "MATCH (a)-[r]->(b) RETURN a.id AS src, type(r) AS rel, b.id AS tgt LIMIT 3000"
+            )
+            for record in rel_result:
+                if record["src"] and record["tgt"]:
+                    relations.append({
+                        "source": record["src"],
+                        "relation": record["rel"],
+                        "target": record["tgt"],
+                    })
+    except Exception as e:
+        print(f"[graph_rag] _read_graph_from_neo4j error: {e}")
+    print(f"[graph_rag] Read {len(entities)} nodes and {len(relations)} relations from Neo4j.")
+    return entities, relations
+
+
+# ── build full graph from chunks ──────────────────────────────────────────────
+
 def build_graph_from_chunks(chunks: List[str]) -> Tuple[List[Dict], List[Dict]]:
     """
     Extract entities/relations from all chunks and ingest to Neo4j.
-    Returns (all_entities, all_relations).
+    IMPORTANT: Skips the expensive LLM build if Neo4j already has data.
     """
+    # ── Fast path: Neo4j already populated ────────────────────────────────────
+    if _neo4j_has_data():
+        print("[graph_rag] Neo4j already has data — skipping LLM extraction. Reading existing graph.")
+        return _read_graph_from_neo4j()
+
+    # ── Slow path: Neo4j is empty → build from scratch ────────────────────────
+    print("[graph_rag] Neo4j is empty — starting fast local NLP graph extraction...")
     all_entities: List[Dict] = []
     all_relations: List[Dict] = []
 
-    for chunk in chunks:
+    # Use fast local spaCy extraction for all chunks
+    for i, chunk in enumerate(chunks):
+        if i % 50 == 0:
+            print(f"[graph_rag] Extracting chunk {i}/{len(chunks)}...")
         ents, rels = extract_entities_relations(chunk)
         all_entities.extend(ents)
         all_relations.extend(rels)
+
+    print(f"[graph_rag] Extracted {len(all_entities)} entities and {len(all_relations)} relations.")
 
     # Deduplicate entities
     seen_ents = set()
@@ -395,25 +496,58 @@ def build_graph_from_chunks(chunks: List[str]) -> Tuple[List[Dict], List[Dict]]:
 
 def get_graph_info(entities: List[Dict], relations: List[Dict]) -> Dict:
     """Aggregate all graph info for the Graph RAG tab response."""
-    community_info = detect_communities(entities, relations)
-    metrics = compute_graph_metrics(entities, relations)
+    # Stopwords to exclude from graph visualization (noisy single tokens)
+    GRAPH_STOPWORDS = {
+        'dans', 'les', 'des', 'une', 'est', 'qui', 'que', 'par', 'sur',
+        'avec', 'pour', 'ses', 'son', 'cette', 'ces', 'leur', 'leurs',
+        'aux', 'nul', 'the', 'and', 'for', 'are', 'was', 'its',
+        'not', 'but', 'can', 'all', 'has', 'had', 'our', 'from', 'have',
+        'un', 'et', 'ou', 'quoi', 'dont', 'où', 'quand', 'pourquoi', 'comment',
+        'ce', 'cet', 'mon', 'ton', 'ma', 'ta', 'sa', 'mes', 'tes',
+        'notre', 'votre', 'nos', 'vos', 'je', 'tu', 'il', 'elle', 'nous', 'vous',
+        'ils', 'elles', 'me', 'te', 'se', 'lui', 'y', 'en', 'sont', 'ont', 'plus', 'très',
+        'bien', 'tout', 'tous', 'toute', 'toutes', 'a', 'de', 'du', 'au',
+        'puis', 'au-delà', 'delà'
+    }
 
-    # Build node/edge lists for Aura visualisation
-    nodes = [{"id": e["id"], "label": e.get("label", "ENTITY"), "group": 0}
-             for e in entities[:50]]
-    edges = [{"source": r["source"], "target": r["target"], "relation": r["relation"]}
-             for r in relations[:100]]
+    # 1. Filter entities BEFORE running analytics
+    filtered_entities = [
+        e for e in entities
+        if e.get("id")
+        and len(str(e["id"]).strip()) > 2
+        and str(e["id"]).strip().lower() not in GRAPH_STOPWORDS
+    ][:1000]
 
-    # Assign group from community partition
+    valid_ids = {n["id"] for n in filtered_entities}
+
+    # 2. Filter relations to only include valid endpoints
+    filtered_relations = [
+        r for r in relations
+        if r.get("source") in valid_ids and r.get("target") in valid_ids
+    ][:3000]
+
+    # 3. Compute analytics on the clean data
+    community_info = detect_communities(filtered_entities, filtered_relations)
+    metrics = compute_graph_metrics(filtered_entities, filtered_relations)
+
+    # 4. Build node and edge lists for the UI
+    raw_nodes = [
+        {"id": e["id"], "label": e.get("label", "ENTITY"), "group": 0}
+        for e in filtered_entities
+    ]
+    raw_edges = filtered_relations
+
+    # Assign community group from Louvain partition
     partition = community_info.get("partition", {})
-    for node in nodes:
+    for node in raw_nodes:
         node["group"] = partition.get(node["id"], 0)
 
     return {
-        "graph_aura":    {"nodes": nodes, "edges": edges},
-        "modularity":    community_info["modularity"],
-        "num_clusters":  community_info["num_clusters"],
-        "communities":   community_info["communities"],
+        "graph_aura":     {"nodes": raw_nodes, "edges": raw_edges},
+        "modularity":     community_info["modularity"],
+        "num_clusters":   community_info["num_clusters"],
+        "communities":    community_info["communities"],
         "centrality_top": metrics["centrality"],
         "semantic_paths": metrics["semantic_paths"],
+        "density":        metrics["density"],
     }

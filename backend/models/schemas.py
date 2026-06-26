@@ -16,6 +16,12 @@ class QueryResponse(BaseModel):
     answer: str
     sources: List[str] = []
     policy_path: List[str] = []      # steps the agent took
+    state: Optional[str] = None      # discretised state for Q-Learning feedback
+
+class FeedbackRequest(BaseModel):
+    state: str
+    action: str                      # "Graph RAG" | "Vectorial RAG"
+    reward_adjustment: float         # +0.5 or -0.5
 
 
 # ── Vectorial RAG ──────────────────────────────────────────────────────────────
@@ -25,11 +31,19 @@ class ChunkInfo(BaseModel):
     total_chunks: int
     avg_chunk_size: int
     sample_chunks: List[str] = []
+    hierarchy: List[Dict[str, Any]] = []
+
+class PcaPoint(BaseModel):
+    x: float
+    y: float
+    chunk: str
+    preview: str
+    is_nearest: bool = False
 
 class EmbeddingInfo(BaseModel):
     total_vectors: int
     dimensions: int
-    pca_points: List[Dict[str, float]] = []  # [{x, y, label}]
+    pca_points: List[PcaPoint] = []
 
 class RetrievalResult(BaseModel):
     doc_id: str
@@ -73,6 +87,9 @@ class GraphResponse(BaseModel):
     communities: List[Community] = []
     centrality_top: List[Dict[str, Any]] = []
     semantic_paths: List[str] = []
+    density: float = 0.0
+    fusion_metrics: str = ""
+    contextual_recommendations: List[str] = []
 
 
 # ── Agentic RAG ────────────────────────────────────────────────────────────────
@@ -92,3 +109,4 @@ class AgenticResponse(BaseModel):
     decision_path: List[str] = []
     final_answer: str
     provenance: str
+    cypher_queries: List[str] = []
