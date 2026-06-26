@@ -20,3 +20,11 @@ requests
 tqdm
 PyPDF2
 dotenv
+rank-bm25
+scikit-learn
+transformers
+gensim
+spacy
+networkx
+python-louvain
+openai

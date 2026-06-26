@@ -19,10 +19,27 @@ ACTIONS = {0: "Vectorial RAG", 1: "Graph RAG"}
 
 # ── relational keywords that push toward Graph RAG ────────────────────────────
 GRAPH_KEYWORDS = {
+    # English
     "relation", "relations", "related", "link", "linked", "connect", "connected",
     "network", "path", "paths", "between", "structure", "hierarchy", "graph",
     "community", "communities", "entity", "entities", "who", "which", "where",
-    "neighbour", "neighbor", "cluster", "clusters",
+    "neighbour", "neighbor", "cluster", "clusters", "associated", "association",
+    "connection", "linked", "bond", "relationship",
+    # French - relations
+    "lien", "liens", "lié", "liée", "liés", "liées", "relier", "relie", "reliés",
+    "connecté", "connectée", "connectés", "associé", "associée", "associés",
+    "rapport", "rapports", "connexion", "connexions", "relation", "relations",
+    "réseau", "chemin", "chemins", "entre", "hiérarchie",
+    # French - graph/structure
+    "graphe", "communauté", "communautés", "entité", "entités",
+    "voisin", "voisins", "cluster", "clusters",
+    # French - question words (entity-targeting)
+    "qui", "lequel", "laquelle", "lesquels", "lesquelles", "où",
+    "quel", "quels", "quelle", "quelles",
+    # French - relationship verbs
+    "utilise", "utiliser", "employé", "employée", "intègre", "intégrer",
+    "fournit", "fournir", "alimente", "alimenter", "force", "forcer",
+    "existe", "exister", "repose", "reposer"
 }
 
 # ── semantic keywords that push toward Vectorial RAG ─────────────────────────
@@ -30,6 +47,10 @@ SEMANTIC_KEYWORDS = {
     "what", "how", "explain", "describe", "summarise", "summary", "meaning",
     "context", "about", "topic", "theme", "why", "impact", "effect", "cause",
     "trend", "evolution", "analysis", "analyse", "analyse",
+    "quoi", "comment", "expliquer", "décrire", "résumer", "résumé", "signification",
+    "contexte", "propos", "sujet", "thème", "pourquoi", "impact", "effet", "cause",
+    "tendance", "évolution", "analyse", "analyser", "définition", "définir",
+    "différence", "différences", "comparaison", "comparer", "rôle", "role"
 }
 
 
@@ -42,7 +63,53 @@ def _load_q_table() -> Dict[str, List[float]]:
                 return json.load(f)
         except Exception:
             pass
-    return {}
+    
+    # Pre-initialize Q-table with keyword-based values
+    # Format: state -> [Vectorial score, Graph score]
+    # States are 4-letter codes: [semantic, entity, complexity, question_type]
+    # Each letter: H (high ≥0.67), M (medium 0.33-0.67), L (low <0.33)
+    
+    pre_initialized = {}
+
+    # ── Default: all unknown states → equal probability ──────────────────────
+    for sem in ["L", "M", "H"]:
+        for entity in ["L", "M", "H"]:
+            for complexity in ["L", "M", "H"]:
+                for qtype in ["L", "M", "H"]:
+                    pre_initialized[f"{sem}{entity}{complexity}{qtype}"] = [0.4, 0.4, 0.2]
+
+    # ── Low semantic + any entity → lean toward Graph ─────────────────────────
+    # These are relational/entity-targeted questions
+    for entity in ["L", "M", "H"]:
+        for complexity in ["L", "M", "H"]:
+            for qtype in ["L", "M", "H"]:
+                pre_initialized[f"L{entity}{complexity}{qtype}"] = [0.3, 0.55, 0.15]
+
+    # ── High entity count → strongly prefer Graph ─────────────────────────────
+    for sem in ["L", "M"]:
+        for complexity in ["L", "M", "H"]:
+            for qtype in ["L", "M", "H"]:
+                pre_initialized[f"{sem}H{complexity}{qtype}"] = [0.2, 0.65, 0.15]
+
+    # ── "who/which/where" questions (qtype=H) → prefer Graph ─────────────────
+    for sem in ["L", "M"]:
+        for entity in ["L", "M", "H"]:
+            for complexity in ["L", "M", "H"]:
+                pre_initialized[f"{sem}{entity}{complexity}H"] = [0.25, 0.60, 0.15]
+
+    # ── High semantic → strongly prefer Vectorial (highest priority) ──────────
+    for entity in ["L", "M", "H"]:
+        for complexity in ["L", "M", "H"]:
+            for qtype in ["L", "M", "H"]:
+                pre_initialized[f"H{entity}{complexity}{qtype}"] = [0.70, 0.15, 0.15]
+
+    # ── High complexity → Hybrid ──────────────────────────────────────────────
+    for sem in ["L", "M"]:
+        for entity in ["L", "M", "H"]:
+            for qtype in ["L", "M", "H"]:
+                pre_initialized[f"{sem}{entity}H{qtype}"] = [0.2, 0.2, 0.6]
+
+    return pre_initialized
 
 
 def _save_q_table(table: Dict[str, List[float]]) -> None:
@@ -55,7 +122,6 @@ def _save_q_table(table: Dict[str, List[float]]) -> None:
 
 _q_table: Dict[str, List[float]] = _load_q_table()
 
-
 # ── feature extraction ────────────────────────────────────────────────────────
 
 def extract_features(query: str) -> Dict[str, float]:
@@ -63,7 +129,10 @@ def extract_features(query: str) -> Dict[str, float]:
     Return a feature dict for the query.
     All values are in [0, 1].
     """
-    words = re.findall(r'\b\w+\b', query.lower())
+    # Extract raw words for case-sensitive checks
+    raw_words = re.findall(r'\b\w+\b', query)
+    words = [w.lower() for w in raw_words]
+
     if not words:
         return {"semantic_score": 0.5, "entity_count": 0.0, "complexity": 0.5, "question_type": 0.0}
 
@@ -71,14 +140,16 @@ def extract_features(query: str) -> Dict[str, float]:
     semantic_hits = sum(1 for w in words if w in SEMANTIC_KEYWORDS)
 
     semantic_score = semantic_hits / max(1, semantic_hits + graph_hits)
-    entity_count   = min(1.0, len([w for w in words if w[0].isupper()]) / max(1, len(words)))
+    
+    # Check uppercase letters using raw_words instead of lowercased words
+    entity_count   = min(1.0, len([w for w in raw_words if w[0].isupper()]) / max(1, len(raw_words)))
     complexity     = min(1.0, len(words) / 30.0)
 
     # Question type encoding
-    first_word = words[0]
-    if first_word in {"who", "which", "where"}:
+    first_word = words[0] if words else ""
+    if first_word in {"who", "which", "where", "qui", "lequel", "où", "ou"}:
         question_type = 1.0
-    elif first_word in {"why", "how"}:
+    elif first_word in {"why", "how", "pourquoi", "comment", "quel", "quels", "quelle", "quelles"}:
         question_type = 0.5
     else:
         question_type = 0.0
@@ -148,23 +219,63 @@ def choose_action(features: Dict[str, float], explore: bool = False) -> Tuple[in
 
 def compute_reward(action: int, results: List[Dict], query: str) -> float:
     """
-    Compute reward based on:
+    Compute reward based on multiple factors:
     - Number of relevant results returned
+    - Average similarity score of results
     - Whether chosen action matches query type
-
+    - Quality of the answer (length, keywords)
+    
     Returns a float in [-1, 1].
     """
+    if not results:
+        return -1.0  # No results = bad reward
+    
     features = extract_features(query)
-
-    # Correctness signal
+    
+    # 1. Quantity score (0-0.3)
+    # More results = better, but cap at 5
+    quantity_score = min(0.3, len(results) / 5.0 * 0.3)
+    
+    # 2. Quality score (0-0.3)
+    # Average similarity score of results
+    if results:
+        avg_scores = [r.get("score", 0) for r in results]
+        avg_score = sum(avg_scores) / len(avg_scores) if avg_scores else 0
+        quality_score = min(0.3, avg_score * 0.3)
+    else:
+        quality_score = 0.0
+    
+    # 3. Action correctness score (0-0.2)
+    # Did we choose the right pipeline?
     if action == 1:  # Graph RAG chosen
+        # Graph is better for entity-based and systematic questions
         expected = features["entity_count"] + features["question_type"]
     else:            # Vectorial RAG chosen
+        # Vectorial is better for semantic questions
         expected = features["semantic_score"] + (1 - features["question_type"])
-
-    result_quality = min(1.0, len(results) / 5.0)
-    reward = 0.5 * expected + 0.5 * result_quality
-    return round(float(reward), 4)
+    action_score = min(0.2, expected * 0.2)
+    
+    # 4. Answer relevance score (0-0.2)
+    # Check if query keywords appear in results
+    query_words = set(query.lower().split())
+    relevance_score = 0.0
+    for r in results[:3]:  # Check top 3 results
+        chunk = r.get("chunk", "").lower()
+        matches = sum(1 for w in query_words if w in chunk and len(w) > 3)
+        relevance_score += min(0.067, matches * 0.067)  # 0.2/3
+    relevance_score = min(0.2, relevance_score)
+    
+    # 5. Out-of-context penalty (-0.5 if no relevance)
+    if relevance_score < 0.05 and quantity_score < 0.1:
+        return -0.5  # "I don't know" scenario
+    
+    # Total reward
+    total_reward = quantity_score + quality_score + action_score + relevance_score
+    
+    # Normalize to [-1, 1] range (shift from [0, 1] to [-1, 1])
+    normalized_reward = 2 * total_reward - 1
+    
+    return round(float(normalized_reward), 4)
 
 
 # ── Q-table update ────────────────────────────────────────────────────────────

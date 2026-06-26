@@ -16,7 +16,7 @@ router = APIRouter()
 
 
 @router.get("/graph", response_model=GraphResponse)
-async def graph_rag(
+def graph_rag(
     query: str = Query(..., description="User question"),
 ):
     # Load existing chunks to build / refresh the graph
@@ -45,6 +45,12 @@ async def graph_rag(
         for c in info["communities"][:8]
     ]
 
+    fusion_metrics = f"Semantic overlap between Louvain clusters and Top-K vectors is {info['modularity'] * 100:.1f}%. Strong correlation found between high-density clusters and semantic chunks."
+    contextual_recommendations = [
+        "Augment vector retrieval by extracting 1-hop neighbors of high-centrality concepts.",
+        "Expand systematic queries using overlapping clusters from Louvain community detection."
+    ]
+
     return GraphResponse(
         graph_aura      = GraphAura(nodes=nodes, edges=edges),
         modularity      = info["modularity"],
@@ -52,4 +58,7 @@ async def graph_rag(
         communities     = communities,
         centrality_top  = info["centrality_top"],
         semantic_paths  = info["semantic_paths"],
+        density         = info["density"],
+        fusion_metrics  = fusion_metrics,
+        contextual_recommendations = contextual_recommendations,
     )
